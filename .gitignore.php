@@ -1,0 +1,3 @@
+/clientes/*
+/bicicletasroubadas/*
+/ggj/*
