@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - geometry - vertex colors</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link href="css/style.css" rel="stylesheet" type="text/css">
+	</head>
+	<body>
+		<div id="controllers">
+			<label for="stopwatch">Stopwatch</label>
+			<div id="stopwatch"><span></span></div>
+
+			<label for="timewarp">Timewarp</label>
+			<input id="timewarp" type="range" min="0" max="15000" step="10">
+
+			<label for="volume">Volume</label>
+			<input id="volume" type="range" min="0" max="1" step="0.05" value="0.2">
+
+		</div>
+		<div id="container"></div>
+<div id="info">PendulumsWaves repro for Eric Elliott. <a href="https://www.youtube.com/watch?v=YhMiuzyU1ag" target="_blank">Video Reference</a> - <a href="http://cau.li" target="_blank">cau.li</a> - <a href="https://github.com/cauli/PendulumWaves">Source</a></div>
+		<script src="js/three.min.js"></script>
+		<script src="js/Detector.js"></script>
+		<script src="js/libs/stats.min.js"></script>
+
+
+		<script src="javascript/vendor/jquery/jquery.min.js"></script>
+
+
+		<script src="javascript/Ball.js"></script>
+		<script src="javascript/Stopwatch.js"></script>
+		<script src="javascript/ColorManager.js"></script>
+
+		<script>
+			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+			// Detect if the audio context is supported.
+			window.AudioContext = (
+			  window.AudioContext ||
+			  window.webkitAudioContext ||
+			  null
+			);
+
+			if (!AudioContext) {
+			  throw new Error("AudioContext not supported!");
+			} 
+
+			$( document ).ready(function() {
+		
+				$timewarp = $("#timewarp");
+				$volume = $("#volume");
+
+				var colorManager = new ColorManager();
+
+				var audioContext = new AudioContext;
+
+				var container, stats;
+
+				var camera, scene, renderer;
+
+				var mesh, group, group1, group2, group3, light;
+
+				var mouseX = -300, mouseY = -400;
+
+				var windowHalfX = window.innerWidth / 2;
+				var windowHalfY = window.innerHeight / 2;
+
+				var timer;
+
+				window.volume = 0.2;
+
+				var MIN_ZOOM = -30000;
+				var MAX_ZOOM = 30000;
+
+
+				/*****************************/
+				var ballRadius = 2;
+
+				var timeStepCounter = -1;
+				var N = 15000;
+
+
+				var g = 9.807; // Gravity on the planet of the simulation. Assuming earth.
+				var m = 7500;    // Mass of the balls
+
+				var l = 31;    // Length of the rope
+				var iL = l;
+				var dL = 0.83; // Length of the rope deviation per ball.
+
+				var theta0 = Math.PI/4, v0 = 0, ti = 0, tf = 1350, alpha = 200;
+				var ballCount = 16;
+
+				var balls = [];
+
+				var initX = 0;
+				var currentX = 0;
+				var deltaX = 5;
+
+				// Sound
+				var initFreq = 700;
+				var deltaFreq = 70;
+				var currentDeltaFreq = 0;
+
+				var shadowDist = -1 * (l + (ballCount * dL) + ballRadius) ;
+				/*****************************/
+
+
+				$timewarp.attr('max',N);
+
+				$timewarp.on("change", function() {
+					timeStepCounter = $(this).val();
+				});
+
+				$volume.on("change", function() {
+					window.volume = $(this).val();
+				});
+
+				$('input[type=range]').on('input', function () {
+				    $(this).trigger('change');
+				});
+
+				init();
+				animate();
+
+				/* du/dt = f with f = [ u(2); -(g/l)*sin(u(1)) ] */
+				function integrator(g, l, alpha, m, theta0, v0, N, ti, tf) {
+					var thetas = [];
+					var times = [];
+					var vs = [];
+
+				    var h = (tf - ti)/N; 
+				    var t = ti;
+				    var theta, v, k11, k12, k21, k22, k31, k32, k41, k42;
+				    var i;
+
+				    theta = theta0;
+				    v = v0;
+
+				    vs.push(v);
+				    thetas.push(theta0);
+				    times.push(t);
+
+				    for(var i=1; i<N; i++)
+				    {
+				        k11 = h*v;
+				        k12 = -h*(alpha/m)*v - h*(g/l)*Math.sin(theta);
+				        
+				        k21 = h*(v + k11/2);
+				        k22 = -h*(alpha/m)*(v + k12/2) - h*(g/l)*Math.sin(theta + k12/2);
+				        
+				        k31 = h*(v + k21/2);
+				        k32 = -h*(alpha/m)*(v + k22/2) -h*(g/l)*Math.sin(theta + k22/2);
+				        
+				        k41 = h*(v + k31);
+				        k42 =  -h*(alpha/m)*(v + k32) - h*(g/l)*Math.sin(theta + k32);
+				        
+				        theta = theta + (k11 + 2*k21 + 2*k31 + k41)/6;
+				        v = v + (k12 + 2*k22 + 2*k32 + k42)/6;
+				        t = t + h;
+
+				        thetas.push(theta);
+				        vs.push(v);
+				        times.push(t);
+				   }
+
+				   return {thetas:thetas};
+				}
+
+
+				function init() {
+					container = document.getElementById( 'container' );
+
+					camera = new THREE.PerspectiveCamera( 10, window.innerWidth / window.innerHeight, 1, 30000 );
+					camera.position.z = 600;
+					camera.position.y = 400;
+					camera.position.x = -300;
+
+					scene = new THREE.Scene();
+
+					light = new THREE.DirectionalLight( 0xffffff );
+					light.position.set( 0, 0, 1 );
+					scene.add( light );
+
+					  // add subtle ambient lighting
+			        var ambientLight = new THREE.AmbientLight(0x0c0c0c);
+			        scene.add(ambientLight);
+
+					// shadow
+					var canvas = document.createElement( 'canvas' );
+					canvas.width = 128;
+					canvas.height = 128;
+
+					var context = canvas.getContext( '2d' );
+					var gradient = context.createRadialGradient( canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width / 2 );
+					gradient.addColorStop( 0.1, 'rgba(210,210,210,1)' );
+					gradient.addColorStop( 1, 'rgba(255,255,255,1)' );
+
+					context.fillStyle = gradient;
+					context.fillRect( 0, 0, canvas.width, canvas.height );
+
+					var shadowTexture = new THREE.Texture( canvas );
+					shadowTexture.needsUpdate = true;
+
+					var shadowMaterial = new THREE.MeshBasicMaterial( { map: shadowTexture } );
+					var shadowGeo = new THREE.PlaneBufferGeometry( ballRadius*3, ballRadius*3, 1, 1 );
+
+					var color, f, f2, f3, p, n, vertexIndex,
+						radius = ballRadius,
+						geometry  = new THREE.IcosahedronGeometry( radius, 1 );
+
+
+					var lineOriginMaterial = new THREE.LineDashedMaterial({
+						vertexColors: false,
+			            color: 0xededed,
+			            dashSize: 1,
+			            gapSize: 20,
+			            scale: 0.1
+					});
+
+					var lineMaterial = new THREE.LineDashedMaterial({
+						vertexColors: false,
+			            color: 0x000000,
+			            dashSize: 2,
+			            gapSize: 2,
+			            scale: 0.1
+					});
+
+
+					var materials = [
+						new THREE.MeshLambertMaterial( { color: 0xffffff, shading: THREE.FlatShading } )
+					];
+
+
+					for(var i = 0; i < ballCount; i++)
+					{
+						var originLineGeometry = new THREE.Geometry();
+							originLineGeometry.vertices.push(
+							new THREE.Vector3( 0, 0, 0 ),
+							new THREE.Vector3( 0, shadowDist, 0 )
+						);
+
+						var lineGeometry = new THREE.Geometry();
+							lineGeometry.vertices.push(
+							new THREE.Vector3( 0, 0, 0 )
+						);
+
+						var originLine = new THREE.Line( originLineGeometry, lineOriginMaterial );
+						scene.add( originLine );
+
+						var line = new THREE.Line( lineGeometry, lineMaterial );
+						scene.add( line );
+
+						var shadow = new THREE.Mesh( shadowGeo, shadowMaterial );
+						shadow.position.y = shadowDist;
+						shadow.rotation.x = - Math.PI / 2;
+						scene.add( shadow );
+
+						var group = THREE.SceneUtils.createMultiMaterialObject( geometry, materials );
+
+						var color = new THREE.Color(colorManager.grabNextColor());
+
+						group.children[0].material = new THREE.MeshLambertMaterial( { color: color } );
+
+						group.position.x = -400;
+						group.position.z = initX + currentX;
+						shadow.position.z = line.position.z = originLine.position.z = group.position.z;
+						group.rotation.x = 0;
+
+						scene.add( group );
+
+						var ballConfig = {	
+							audioContext:audioContext,
+							ropeLength:-l,
+							group: group,
+							line: line,
+							originLine: originLine,
+							shadow:shadow,
+							integration:integrator(g, l, alpha, m, theta0, v0, N, ti, tf),
+							frequency: initFreq + currentDeltaFreq,
+							defaultMaterial: group.children[0].material
+						};
+
+						balls.push( new Ball(ballConfig) );
+
+						l += dL;
+						currentDeltaFreq += deltaFreq;
+						currentX += deltaX;
+					}
+
+
+					renderer = new THREE.WebGLRenderer( { antialias: true } );
+					renderer.setClearColor( 0xffffff );
+					renderer.setPixelRatio( window.devicePixelRatio );
+					renderer.setSize( window.innerWidth, window.innerHeight );
+					container.appendChild( renderer.domElement );
+
+					stats = new Stats();
+					stats.domElement.style.position = 'absolute';
+					stats.domElement.style.top = '0px';
+					container.appendChild( stats.domElement );
+
+					document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+					document.body.addEventListener( 'mousewheel', mousewheel, false );
+					document.body.addEventListener( 'DOMMouseScroll', mousewheel, false );
+
+					window.addEventListener( 'resize', onWindowResize, false );
+
+					var elem = document.getElementById("stopwatch");
+					timer = new Stopwatch(elem, {delay: 10});
+
+					// start the timer
+					timer.start();
+				}
+
+				function mousewheel ( e ) {
+				
+				     var d = ((typeof e.wheelDelta != "undefined")?(-e.wheelDelta):e.detail);
+				     d = 100 * ((d>0)?1:-1);    
+				     var cPos = camera.position;
+
+				     
+				     if (isNaN(cPos.x) || isNaN(cPos.y) || isNaN(cPos.y)) return;
+
+			        if (cPos.z < MIN_ZOOM){
+			           cPos.z = MIN_ZOOM;
+			           return ;
+			        }
+
+			        if (cPos.z > MAX_ZOOM){
+			        	cPos.z = MAX_ZOOM;
+			        	return;
+			        }
+	
+				   mb = d>0 ? 1.1 : 0.9;
+				   cPos.x = cPos.x * mb;
+				   cPos.y = cPos.y * mb;
+				   cPos.z = cPos.z * mb;
+				}
+
+				function onWindowResize() {
+
+					windowHalfX = window.innerWidth / 2;
+					windowHalfY = window.innerHeight / 2;
+
+					camera.aspect = window.innerWidth / window.innerHeight;
+					camera.updateProjectionMatrix();
+
+					renderer.setSize( window.innerWidth, window.innerHeight );
+
+				}
+
+				function onDocumentMouseMove( event ) {
+
+					mouseX = ( event.clientX - windowHalfX );
+					mouseY = ( event.clientY - windowHalfY );
+
+				}
+
+				//
+
+				function animate() {
+					requestAnimationFrame( animate );
+
+					render();
+					stats.update();
+				}
+
+				function render() {
+
+				    timeStepCounter++;
+
+			        if(timeStepCounter >= N) {
+			            timeStepCounter = 0;
+			            // reset the timer
+						timer.reset();
+			        }
+
+					camera.position.x += ( mouseX - camera.position.x ) * 0.05;
+					camera.position.y += ( - mouseY - camera.position.y ) * 0.05;
+
+					camera.lookAt( new THREE.Vector3(scene.position.x, scene.position.y, l) );
+
+					for(var i = 0; i<balls.length; i++)
+					{	
+						balls[i].move(timeStepCounter);
+
+						//movePendulum(balls[i].group, balls[i].integration.thetas[timeStepCounter], i);
+					}
+
+					renderer.render( scene, camera );
+				}
+			});
+
+		
+			
+		</script>
+
+	</body>
+</html>

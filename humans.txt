@@ -1,0 +1,9 @@
+Author:
+	Cauli Tomaz
+	From: Curitiba, Parana, Brazil
+	Twitter: @cauli
+
+Language: Portuguese (Brazil)
+Doctype: HTML5
+IDE: Sublime Text, FileZilla
+Plugins: jQuery, Threes.js, Physijs
