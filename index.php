@@ -28,7 +28,7 @@
 	    </a>
 -->
 
-	    <a class="main-link" href="./theocdexperience">
+	    <a class="main-link" href="./theocdexperience.php">
 		    <div class="hoverable">
 			    <div class="focuspoint main-menu-focuspoint"
 					data-focus-x="-0.29" data-focus-y="-1.00" data-focus-w="1920" data-focus-h="537" >
@@ -42,7 +42,7 @@
 		    </div>
 	    </a>
 
-	    <a class="main-link" href="./ctl">
+	    <a class="main-link" href="./ctl.php">
 		    <div class="hoverable">
 			    <div class="focuspoint main-menu-focuspoint"
 					data-focus-x="-0.29" data-focus-y="-1.00" data-focus-w="1920" data-focus-h="400" >
@@ -56,7 +56,7 @@
 		    </div>
 	    </a>
 
-	    <a class="main-link" href="./fs">
+	    <a class="main-link" href="./fs.php">
 		    <div class="hoverable">
 			    <div class="focuspoint main-menu-focuspoint"
 					data-focus-x="0.39" data-focus-y="-0.27" data-focus-w="1920" data-focus-h="400" >
@@ -70,7 +70,7 @@
 		    </div>
 		</a>
 
-		<a class="main-link" href="./cwm">
+		<a class="main-link" href="./cwm.php">
 		    <div class="hoverable">
 			    <div class="focuspoint main-menu-focuspoint"
 					data-focus-x="0.02" data-focus-y="0.00" data-focus-w="1920" data-focus-h="400" >
@@ -85,7 +85,7 @@
 		    </div>
 	    </a>
 
-	    <a class="main-link" href="http://cau.li/bicicletasroubadas">
+	    <a class="main-link" href="http://cau.li/bicicletasroubadas.php">
 		    <div class="hoverable">
 			     <div class="focuspoint main-menu-focuspoint"
 					data-focus-x="0.35" data-focus-y="0.00" data-focus-w="1920" data-focus-h="400" >
